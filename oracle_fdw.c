@@ -574,7 +574,7 @@ _PG_init(void)
 			continue;
 
 		/*
-		 * If we find two two-argument functions called 
+		 * If we find two two-argument functions called
 		 * "st_geomfromwkb", assume that two copies of PostGIS
 		 * are installed and give up.
 		 */
@@ -2131,18 +2131,18 @@ acquireSampleRowsFunc(Relation relation, int elevel, HeapTuple *rows, int targro
 		{
 			/* all columns are used */
 			fdw_state->oraTable->cols[i]->used = 1;
-	
+
 			/* allocate memory for return value */
 			fdw_state->oraTable->cols[i]->val = (char *)palloc(fdw_state->oraTable->cols[i]->val_size);
 			fdw_state->oraTable->cols[i]->val_len = 0;
 			fdw_state->oraTable->cols[i]->val_len4 = 0;
 			fdw_state->oraTable->cols[i]->val_null = 1;
-	
+
 			if (first_column)
 				first_column = false;
 			else
 				appendStringInfo(&query, ", ");
-	
+
 			/* append column name */
 			appendStringInfo(&query, "%s", fdw_state->oraTable->cols[i]->name);
 		}
@@ -2329,19 +2329,19 @@ getOracleWhereClause(oracleSession *session, RelOptInfo *foreignrel, Expr *expr,
 				/* we cannot handle system columns */
 				if (variable->varattno < 1)
 					return NULL;
-	
+
 				/*
 				 * Allow boolean columns here.
 				 * They will be rendered as ("COL" <> 0).
 				 */
 				if (! (canHandleType(variable->vartype) || variable->vartype == BOOLOID))
 					return NULL;
-	
+
 				/* get oraTable column index corresponding to this column (-1 if none) */
 				index = oraTable->ncols - 1;
 				while (index >= 0 && oraTable->cols[index]->pgattnum != variable->varattno)
 					--index;
-	
+
 				/* if no Oracle column corresponds, translate as NULL */
 				if (index == -1)
 				{
@@ -2349,7 +2349,7 @@ getOracleWhereClause(oracleSession *session, RelOptInfo *foreignrel, Expr *expr,
 					appendStringInfo(&result, "NULL");
 					break;
 				}
-	
+
 				/*
 				 * Don't try to convert a column reference if the type is
 				 * converted from a non-string type in Oracle to a string type
@@ -2365,17 +2365,17 @@ getOracleWhereClause(oracleSession *session, RelOptInfo *foreignrel, Expr *expr,
 						&& oratype != ORA_TYPE_NCHAR
 						&& oratype != ORA_TYPE_CLOB)
 					return NULL;
-	
+
 				initStringInfo(&result);
-	
+
 				/* work around the lack of booleans in Oracle */
 				if (variable->vartype == BOOLOID)
 				{
 					appendStringInfo(&result, "(");
 				}
-	
+
 				appendStringInfo(&result, "%s", oraTable->cols[index]->name);
-	
+
 				/* work around the lack of booleans in Oracle */
 				if (variable->vartype == BOOLOID)
 				{
@@ -2392,7 +2392,7 @@ getOracleWhereClause(oracleSession *session, RelOptInfo *foreignrel, Expr *expr,
 				/* don't try to handle type interval */
 				if (! canHandleType(variable->vartype) || variable->vartype == INTERVALOID)
 					return NULL;
-	
+
 				/* find the index in the parameter list */
 				index = 0;
 				foreach(cell, *params)
@@ -2407,7 +2407,7 @@ getOracleWhereClause(oracleSession *session, RelOptInfo *foreignrel, Expr *expr,
 					++index;
 					*params = lappend(*params, variable);
 				}
-	
+
 				/* parameters will be called :p1, :p2 etc. */
 				initStringInfo(&result);
 				appendStringInfo(&result, ":p%d", index);
@@ -4565,8 +4565,8 @@ convertTuple(struct OracleFdwState *fdw_state, Datum *values, bool *nulls, bool 
 			fdw_state->columnindex = index;
 
 			/* for string types, check that the data are in the database encoding */
-			if (pgtype == BPCHAROID || pgtype == VARCHAROID || pgtype == TEXTOID)
-				(void)pg_verify_mbstr(GetDatabaseEncoding(), value, value_len, false);
+			/*if (pgtype == BPCHAROID || pgtype == VARCHAROID || pgtype == TEXTOID)*/
+				/*(void)pg_verify_mbstr(GetDatabaseEncoding(), value, value_len, false);*/
 
 			/* call the type input function */
 			switch (pgtype)
