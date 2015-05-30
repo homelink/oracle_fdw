@@ -113,6 +113,8 @@ struct OracleFdwOption
 #define OPT_MAX_LONG "max_long"
 #define OPT_READONLY "readonly"
 #define OPT_KEY "key"
+#define OPT_ORDER_BY "order_by"
+#define OPT_ORDER_ORDER "order_order"
 
 #define DEFAULT_MAX_LONG 32767
 
@@ -126,6 +128,8 @@ static struct OracleFdwOption valid_options[] = {
 	{OPT_PASSWORD, UserMappingRelationId, true},
 	{OPT_SCHEMA, ForeignTableRelationId, false},
 	{OPT_TABLE, ForeignTableRelationId, true},
+	{OPT_ORDER_BY, ForeignTableRelationId, false},
+	{OPT_ORDER_ORDER, ForeignTableRelationId, false},
 	{OPT_PLAN_COSTS, ForeignTableRelationId, false},
 	{OPT_MAX_LONG, ForeignTableRelationId, false},
 	{OPT_READONLY, ForeignTableRelationId, false}
@@ -170,6 +174,8 @@ struct OracleFdwState {
 	unsigned long rowcount;        /* rows already read from Oracle */
 	int columnindex;               /* currently processed column for error context */
 	MemoryContext temp_cxt;        /* short-lived memory for data modification */
+	char *order_by;                 /* order by option, like order by create_time desc*/
+	char *order_order               /*desc or asc*/
 };
 
 /*
@@ -223,7 +229,7 @@ static int oracleIsForeignRelUpdatable(Relation rel);
  */
 static struct OracleFdwState *getFdwState(Oid foreigntableid, bool *plan_costs);
 static void oracleGetOptions(Oid foreigntableid, List **options);
-static char *createQuery(oracleSession *session, RelOptInfo *foreignrel, bool modify, struct oraTable *oraTable, List **params, bool **pushdown_clauses);
+static char *createQuery(oracleSession *session, RelOptInfo *foreignrel, bool modify, struct oraTable *oraTable, List **params, bool **pushdown_clauses, char *order_by, char *order_order);
 static void getColumnData(Oid foreigntableid, struct oraTable *oraTable);
 #ifndef OLD_FDW_API
 static int acquireSampleRowsFunc (Relation relation, int elevel, HeapTuple *rows, int targrows, double *totalrows, double *totaldeadrows);
@@ -621,7 +627,7 @@ oraclePlanForeignScan(Oid foreigntableid,
 	fdwState = getFdwState(foreigntableid, &plan_costs);
 
 	/* construct Oracle query and get the list of parameters and actions for RestrictInfos */
-	fdwState->query = createQuery(fdwState->session, baserel, false, fdwState->oraTable, &(fdwState->params), &(fdwState->pushdown_clauses));
+	fdwState->query = createQuery(fdwState->session, baserel, false, fdwState->oraTable, &(fdwState->params), &(fdwState->pushdown_clauses), fdwState->order_by, fdwState->order_order);
 	elog(DEBUG1, "oracle_fdw: remote query is: %s", fdwState->query);
 
 	/* get PostgreSQL column data types, check that they match Oracle's */
@@ -730,7 +736,7 @@ oracleGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntable
 	}
 
 	/* construct Oracle query and get the list of parameters and actions for RestrictInfos */
-	fdwState->query = createQuery(fdwState->session, baserel, for_update, fdwState->oraTable, &(fdwState->params), &(fdwState->pushdown_clauses));
+	fdwState->query = createQuery(fdwState->session, baserel, for_update, fdwState->oraTable, &(fdwState->params), &(fdwState->pushdown_clauses), fdwState->order_by, fdwState->order_order);
 	elog(DEBUG1, "oracle_fdw: remote query is: %s", fdwState->query);
 
 	/* get PostgreSQL column data types, check that they match Oracle's */
@@ -1781,6 +1787,8 @@ struct OracleFdwState
 	fdwState->paramList = NULL;
 	fdwState->pushdown_clauses = NULL;
 	fdwState->temp_cxt = NULL;
+	fdwState->order_by = NULL;
+	fdwState->order_order = NULL;
 
 	/*
 	 * Get all relevant options from the foreign table, the user mapping,
@@ -1806,7 +1814,13 @@ struct OracleFdwState
 			plancosts = ((Value *) (def->arg))->val.str;
 		if (strcmp(def->defname, OPT_MAX_LONG) == 0)
 			maxlong = ((Value *) (def->arg))->val.str;
+		if (strcmp(def->defname, OPT_ORDER_BY) == 0)
+			fdwState->order_by = ((Value *) (def->arg))->val.str;
+		if (strcmp(def->defname, OPT_ORDER_ORDER) == 0)
+			fdwState->order_order = ((Value *) (def->arg))->val.str;
 	}
+
+	
 
 	/* convert "max_long" option to number or use default */
 	if (maxlong == NULL)
@@ -1955,8 +1969,9 @@ getColumnData(Oid foreigntableid, struct oraTable *oraTable)
  * 		As a side effect, we also mark the used columns in oraTable.
  */
 char
-*createQuery(oracleSession *session, RelOptInfo *foreignrel, bool modify, struct oraTable *oraTable, List **params, bool **pushdown_clauses)
+*createQuery(oracleSession *session, RelOptInfo *foreignrel, bool modify, struct oraTable *oraTable, List **params, bool **pushdown_clauses, char* order_by, char* order_order)
 {
+	//elog(ERROR, "order by \"%s\"", order_by);create desc
 	ListCell *cell;
 	bool first_col = true, in_quote = false;
 	int i, clause_count = -1, index;
@@ -2033,8 +2048,17 @@ char
 	}
 
 	/* append FOR UPDATE if if the scan is for a modification */
-	if (modify)
+	if (modify){
 		appendStringInfo(&query, " FOR UPDATE");
+	}else{
+		if(order_by != NULL){
+			appendStringInfo(&query, " ORDER BY %s", order_by);
+			if(order_order != NULL){
+				appendStringInfo(&query, " %s", order_order);
+			}
+		}
+	}
+	//printf("%s\n", query.data);
 
 	/* get a copy of the where clause without single quoted string literals */
 	wherecopy = pstrdup(query.data);
@@ -2076,7 +2100,7 @@ char
 	initStringInfo(&result);
 	appendStringInfo(&result, "SELECT /*%s*/ %s", md5, query.data);
 	pfree(query.data);
-
+	//printf("%s\n", result.data);
 	return result.data;
 }
 
