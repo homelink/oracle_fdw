@@ -2051,7 +2051,7 @@ char
 	if (modify){
 		appendStringInfo(&query, " FOR UPDATE");
 	}else{
-		if(order_by != NULL){
+		if(order_by != NULL && strlen(order_by) > 1){
 			appendStringInfo(&query, " ORDER BY %s", order_by);
 			if(order_order != NULL){
 				appendStringInfo(&query, " %s", order_order);
